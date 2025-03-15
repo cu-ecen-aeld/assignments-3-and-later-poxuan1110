@@ -22,5 +22,6 @@ void test_validate_my_username()
 
     char *actual_username = malloc_username_from_conf_file();
     TEST_ASSERT_EQUAL_STRING_MESSAGE(expected_username, actual_username, "Username mismatch!");
+
     free(actual_username);
 }
