@@ -1,0 +1,7 @@
+{
+    aarch64-none-linux-gnu-gcc -v 2>&1;
+    echo "";
+    echo "Sysroot path:";
+    aarch64-none-linux-gnu-gcc --print-sysroot;
+} > cross-compile.txt
+
