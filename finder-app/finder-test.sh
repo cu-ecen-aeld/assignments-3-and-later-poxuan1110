@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # Tester script for assignment 1 and assignment 2
 # Author: Siddhant Jajoo
 
@@ -8,7 +8,7 @@ set -u
 NUMFILES=10
 WRITESTR=AELD_IS_FUN
 WRITEDIR=/tmp/aeld-data
-username=$(cat conf/username.txt)
+username=$(cat ./username.txt)
 
 if [ $# -lt 3 ]
 then
@@ -36,7 +36,7 @@ echo "Writing ${NUMFILES} files containing string ${WRITESTR} to ${WRITEDIR}"
 
 rm -rf "${WRITEDIR}"
 
-assignment=$(cat ../conf/assignment.txt)
+assignment=$(cat ./assignment.txt)
 
 if [ "$assignment" != "assignment1" ]
 then
