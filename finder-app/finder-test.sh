@@ -54,8 +54,11 @@ fi
 
 for i in $( seq 1 $NUMFILES)
 do
-	./writer.sh "$WRITEDIR/${username}$i.txt" "$WRITESTR"
+	writefile="${WRITEDIR}/file${i}.txt"
+	writestr="${WRITESTR}"
+	./writer "$writefile" "$writestr"
 done
+
 
 OUTPUTSTRING=$(./finder.sh "$WRITEDIR" "$WRITESTR")
 
