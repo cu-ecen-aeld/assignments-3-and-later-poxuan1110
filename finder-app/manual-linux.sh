@@ -97,17 +97,22 @@ mkdir -p ${OUTDIR}/rootfs/home
 cp writer ${OUTDIR}/rootfs/home/
 cp finder.sh finder-test.sh ${OUTDIR}/rootfs/home/
 cp conf/username.txt conf/assignment.txt ${OUTDIR}/rootfs/home/
-chmod +x ${OUTDIR}/rootfs/home/finder-test.sh
-chmod +x ${OUTDIR}/rootfs/home/finder.sh
-chmod +x ${OUTDIR}/rootfs/home/autorun-qemu.sh
 sed -i 's|conf/username.txt|username.txt|g' ${OUTDIR}/rootfs/home/finder-test.sh
+
 sed -i 's|conf/assignment.txt|assignment.txt|g' ${OUTDIR}/rootfs/home/finder-test.sh
+chmod +x ${OUTDIR}/rootfs/home/finder.sh
+chmod +x ${OUTDIR}/rootfs/home/finder-test.sh
+
 cp autorun-qemu.sh ${OUTDIR}/rootfs/home/
+chmod +x ${OUTDIR}/rootfs/home/autorun-qemu.sh
+
 
 cd ${OUTDIR}/rootfs
 sudo chown -R root:root *
 find . | cpio -H newc -ov --owner root:root > ${OUTDIR}/initramfs.cpio
 cd ${OUTDIR}
 gzip -f initramfs.cpio
+chmod +x ${OUTDIR}/rootfs/home/*.sh
 
 echo "Build complete: Image and initramfs.cpio.gz are ready in ${OUTDIR}"
+exit 0
