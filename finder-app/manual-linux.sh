@@ -1,6 +1,6 @@
 #!/bin/bash
-# Script to build Linux kernel and rootfs manually for assignment
-# Author: Siddhant Jajoo + ChatGPT 修訂
+# Script outline to install and build kernel.
+# Author: Siddhant Jajoo.
 
 set -e
 set -u
@@ -49,6 +49,7 @@ if [ -d "${OUTDIR}/rootfs" ]; then
     sudo rm -rf ${OUTDIR}/rootfs
 fi
 
+# TODO: Create necessary base directories
 mkdir -p rootfs
 cd rootfs
 mkdir -p bin dev etc home lib proc sbin sys tmp usr var
@@ -68,6 +69,7 @@ else
     cd busybox
 fi
 
+# TODO: Make and install busybox
 make -j$(nproc) ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE}
 make CONFIG_PREFIX=${OUTDIR}/rootfs ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} install
 
@@ -75,36 +77,39 @@ echo "Library dependencies"
 ${CROSS_COMPILE}readelf -a ${OUTDIR}/rootfs/bin/busybox | grep "program interpreter"
 ${CROSS_COMPILE}readelf -a ${OUTDIR}/rootfs/bin/busybox | grep "Shared library"
 
-# Add library dependencies to rootfs
+# TODO: Add library dependencies to rootfs
 TOOLCHAIN_DIR=/home/vboxuser/arm-cross-compiler/arm-gnu-toolchain-13.3.rel1-x86_64-aarch64-none-linux-gnu
 LIBC_PATH=${TOOLCHAIN_DIR}/aarch64-none-linux-gnu/libc
 
 cd ${OUTDIR}/rootfs
 mkdir -p lib lib64
 
-cp -a ${LIBC_PATH}/lib/ld-linux-aarch64.so.1 lib/ || { echo "Missing ld-linux-aarch64.so.1"; exit 1; }
+cp -a ${LIBC_PATH}/lib/ld-linux-aarch64.so.1 lib/
 cp -a ${LIBC_PATH}/lib64/libc.so.* lib64/
 cp -a ${LIBC_PATH}/lib64/libm.so.* lib64/
 cp -a ${LIBC_PATH}/lib64/libresolv.so.* lib64/
 
-# Make device nodes
+# TODO: Make device nodes
 sudo mknod -m 666 dev/null c 1 3
 sudo mknod -m 600 dev/console c 5 1
 
-# Build the writer utility
+# TODO: Clean and build the writer utility
 cd "$FINDER_APP_DIR"
 make clean
 make CROSS_COMPILE=${CROSS_COMPILE}
 
-# Copy finder related scripts and files
+# TODO: Copy the finder related scripts and executables to the /home directory on the target rootfs
+# Clean up conflicting directories/files
 rm -rf ${OUTDIR}/rootfs/home/conf
 rm -rf ${OUTDIR}/rootfs/home/scripts
 
+# Copy the finder related scripts and executables to the /home directory on the target rootfs
 cp writer ${OUTDIR}/rootfs/home/
 cp finder.sh finder-test.sh ${OUTDIR}/rootfs/home/
 cp -rL conf ${OUTDIR}/rootfs/home/
+cp finder.sh finder-test.sh ${OUTDIR}/rootfs/home/
 
-# Chown root directory
+# TODO: Chown the root directory
 cd ${OUTDIR}/rootfs
 sudo chown -R root:root *
 
@@ -112,12 +117,12 @@ sudo chown -R root:root *
 cd ${OUTDIR}/rootfs
 find . | cpio -H newc -ov --owner root:root | gzip > ${OUTDIR}/initramfs.cpio.gz
 
-# ✅ Add for autotest
+# Add for autotest
 echo "Copying initramfs.cpio.gz to /tmp/aesd-autograder"
 mkdir -p /tmp/aesd-autograder
 cp ${OUTDIR}/initramfs.cpio.gz /tmp/aesd-autograder/
 
-echo "✅ Build completed!"
+echo "Build completed!"
 echo "Kernel Image: ${OUTDIR}/Image"
 echo "Initramfs:    ${OUTDIR}/initramfs.cpio.gz"
 echo "Copied initramfs to /tmp/aesd-autograder/initramfs.cpio.gz"
