@@ -1,6 +1,5 @@
 #!/bin/sh
-# Tester script for assignment 1 and assignment 2
-# Author: Siddhant Jajoo
+# Modified tester script for assignment 4
 
 set -e
 set -u
@@ -8,7 +7,7 @@ set -u
 NUMFILES=10
 WRITESTR=AELD_IS_FUN
 WRITEDIR=/tmp/aeld-data
-username=$(cat ./username.txt)
+username=$(cat /etc/finder-app/conf/username.txt)
 
 if [ $# -lt 3 ]
 then
@@ -27,37 +26,22 @@ fi
 
 MATCHSTR="The number of files are ${NUMFILES} and the number of matching lines are ${NUMFILES}"
 
-# === REMOVED: Clean and build ===
-# echo "Cleaning previous build artifacts and compiling writer application..."
-# make clean
-# make
-
 echo "Writing ${NUMFILES} files containing string ${WRITESTR} to ${WRITEDIR}"
 
 rm -rf "${WRITEDIR}"
-
-assignment=$(cat ./assignment.txt)
-
-if [ "$assignment" != "assignment1" ]
-then
-    mkdir -p "$WRITEDIR"
-
-    if [ -d "$WRITEDIR" ]
-    then
-        echo "$WRITEDIR created"
-    else
-        exit 1
-    fi
-fi
+mkdir -p "${WRITEDIR}"
 
 for i in $( seq 1 $NUMFILES )
 do
-    ./writer "$WRITEDIR/${username}$i.txt" "$WRITESTR"
+    writer "$WRITEDIR/${username}$i.txt" "$WRITESTR"
 done
 
-OUTPUTSTRING=$(./finder.sh "$WRITEDIR" "$WRITESTR")
+OUTPUTSTRING=$(finder.sh "$WRITEDIR" "$WRITESTR")
 
-# remove temporary directories
+# Output goes to assignment4-result.txt
+echo "${OUTPUTSTRING}" > /tmp/assignment4-result.txt
+
+# remove temporary files (optional)
 rm -rf /tmp/aeld-data
 
 set +e
