@@ -5,6 +5,7 @@
 #include <sys/wait.h>
 #include <fcntl.h>
 #include <stdarg.h>
+#include <stdio.h>  // 加入 perror
 
 /**
  * @param cmd the command to execute with system()
@@ -17,6 +18,7 @@ bool do_system(const char *cmd)
 {
     int ret = system(cmd);
     if (ret == -1) {
+        perror("system() failed");
         return false;
     } else {
         return WIFEXITED(ret) && WEXITSTATUS(ret) == 0;
@@ -24,7 +26,7 @@ bool do_system(const char *cmd)
 }
 
 /**
- * @param count - The number of arguments passed to the function. The variables are command to execute.
+ * @param count - The number of arguments passed to the function. The variables are command to execute,
  *   followed by arguments to pass to the command.
  * @param ... - A list of 1 or more arguments. The first is always the full path to the command to execute,
  *   followed by arguments.
@@ -41,22 +43,24 @@ bool do_exec(int count, ...)
     command[count] = NULL;
     va_end(args);
 
-    fflush(stdout);  // 防止 fork 之後 printf 被重複輸出
+    fflush(stdout);
 
     pid_t pid = fork();
     if (pid == -1) {
+        perror("fork failed");
         return false;
     }
 
     if (pid == 0) {
         // child process
         execv(command[0], command);
-        // 如果 execv 成功不會回到這裡，失敗才會執行以下程式
+        perror("execv failed");
         exit(1);
     } else {
         // parent process
         int status;
         if (waitpid(pid, &status, 0) == -1) {
+            perror("waitpid failed");
             return false;
         }
         return WIFEXITED(status) && WEXITSTATUS(status) == 0;
@@ -82,23 +86,34 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
 
     pid_t pid = fork();
     if (pid == -1) {
+        perror("fork failed");
         return false;
     }
 
     if (pid == 0) {
-        // child process: 重導 stdout
+        // child process
         int fd = open(outputfile, O_WRONLY | O_CREAT | O_TRUNC, 0644);
         if (fd < 0) {
+            perror("open failed");
             exit(1);
         }
-        dup2(fd, STDOUT_FILENO);
-        close(fd);
+
+        if (dup2(fd, STDOUT_FILENO) < 0) {
+            perror("dup2 failed");
+            close(fd);
+            exit(1);
+        }
+
+        close(fd); // dup2 後不再需要原始 fd
+
         execv(command[0], command);
-        exit(1);  // execv failed
+        perror("execv failed");
+        exit(1);
     } else {
-        // parent
+        // parent process
         int status;
         if (waitpid(pid, &status, 0) == -1) {
+            perror("waitpid failed");
             return false;
         }
         return WIFEXITED(status) && WEXITSTATUS(status) == 0;
