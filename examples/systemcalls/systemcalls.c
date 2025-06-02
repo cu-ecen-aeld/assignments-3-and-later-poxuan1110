@@ -5,7 +5,7 @@
 #include <sys/wait.h>
 #include <fcntl.h>
 #include <stdarg.h>
-#include <stdio.h>  // 加入 perror
+#include <stdio.h>
 
 /**
  * @param cmd the command to execute with system()
@@ -13,16 +13,20 @@
  *   successfully using the system() call, false if an error occurred,
  *   either in invocation of the system() call, or if a non-zero return
  *   value was returned by the command issued in @param cmd.
-*/
+ */
 bool do_system(const char *cmd)
 {
+    if (cmd == NULL) return false;
+
+    fflush(stdout);  // 避免 fork() 前輸出重複
     int ret = system(cmd);
+
     if (ret == -1) {
-        perror("system() failed");
+        perror("system call failed");
         return false;
-    } else {
-        return WIFEXITED(ret) && WEXITSTATUS(ret) == 0;
     }
+
+    return WIFEXITED(ret) && WEXITSTATUS(ret) == 0;
 }
 
 /**
@@ -31,11 +35,12 @@ bool do_system(const char *cmd)
  * @param ... - A list of 1 or more arguments. The first is always the full path to the command to execute,
  *   followed by arguments.
  * @return true if the command executed successfully, false otherwise.
-*/
+ */
 bool do_exec(int count, ...)
 {
     va_list args;
     va_start(args, count);
+
     char *command[count + 1];
     for (int i = 0; i < count; i++) {
         command[i] = va_arg(args, char *);
@@ -43,9 +48,9 @@ bool do_exec(int count, ...)
     command[count] = NULL;
     va_end(args);
 
-    fflush(stdout);
-
+    fflush(stdout);  // 避免 fork() 前輸出重複
     pid_t pid = fork();
+
     if (pid == -1) {
         perror("fork failed");
         return false;
@@ -70,11 +75,14 @@ bool do_exec(int count, ...)
 /**
  * @param outputfile - The full path to the file to write with command output.
  * All other parameters, see do_exec above.
-*/
+ */
 bool do_exec_redirect(const char *outputfile, int count, ...)
 {
+    if (outputfile == NULL) return false;
+
     va_list args;
     va_start(args, count);
+
     char *command[count + 1];
     for (int i = 0; i < count; i++) {
         command[i] = va_arg(args, char *);
@@ -82,33 +90,32 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
     command[count] = NULL;
     va_end(args);
 
-    fflush(stdout);
-
+    fflush(stdout);  // 避免 fork() 前輸出重複
     pid_t pid = fork();
+
     if (pid == -1) {
         perror("fork failed");
         return false;
     }
 
     if (pid == 0) {
-        // child process
+        // child process: redirect stdout
         int fd = open(outputfile, O_WRONLY | O_CREAT | O_TRUNC, 0644);
         if (fd < 0) {
             perror("open failed");
             exit(1);
         }
 
-        if (dup2(fd, STDOUT_FILENO) < 0) {
+        if (dup2(fd, STDOUT_FILENO) == -1) {
             perror("dup2 failed");
             close(fd);
             exit(1);
         }
 
-        close(fd); // dup2 後不再需要原始 fd
-
+        close(fd);
         execv(command[0], command);
         perror("execv failed");
-        exit(1);
+        exit(1);  // execv only returns on error
     } else {
         // parent process
         int status;
