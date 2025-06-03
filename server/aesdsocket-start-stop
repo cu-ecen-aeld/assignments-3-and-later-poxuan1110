@@ -1,0 +1,27 @@
+#!/bin/sh
+
+DAEMON="/usr/bin/aesdsocket"
+PIDFILE="/var/run/aesdsocket.pid"
+NAME="aesdsocket"
+
+case "$1" in
+  start)
+    echo "Starting $NAME..."
+    start-stop-daemon -S -b -m -p "$PIDFILE" -x "$DAEMON" -- -d
+    ;;
+  stop)
+    echo "Stopping $NAME..."
+    start-stop-daemon -K -p "$PIDFILE" -x "$DAEMON" -s SIGTERM
+    ;;
+  restart)
+    $0 stop
+    sleep 1
+    $0 start
+    ;;
+  *)
+    echo "Usage: $0 {start|stop|restart}"
+    exit 1
+    ;;
+esac
+
+exit 0
