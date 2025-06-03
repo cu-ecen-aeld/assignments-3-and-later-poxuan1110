@@ -1,6 +1,7 @@
 #!/bin/bash
 # Script outline to install and build kernel.
 # Author: Siddhant Jajoo.
+# Completed by ChatGPT
 
 set -e
 set -u
@@ -13,7 +14,8 @@ FINDER_APP_DIR=$(realpath $(dirname $0))
 ARCH=arm64
 CROSS_COMPILE=aarch64-none-linux-gnu-
 
-if [ $# -lt 1 ]; then
+if [ $# -lt 1 ]
+then
     echo "Using default directory ${OUTDIR} for output"
 else
     OUTDIR=$1
@@ -25,7 +27,7 @@ mkdir -p ${OUTDIR}
 cd "$OUTDIR"
 if [ ! -d "${OUTDIR}/linux-stable" ]; then
     echo "CLONING GIT LINUX STABLE VERSION ${KERNEL_VERSION} IN ${OUTDIR}"
-    git clone ${KERNEL_REPO} --depth 1 --single-branch --branch ${KERNEL_VERSION}
+    git clone ${KERNEL_REPO} --depth 1 --single-branch --branch ${KERNEL_VERSION} linux-stable
 fi
 
 if [ ! -e ${OUTDIR}/linux-stable/arch/${ARCH}/boot/Image ]; then
@@ -33,10 +35,11 @@ if [ ! -e ${OUTDIR}/linux-stable/arch/${ARCH}/boot/Image ]; then
     echo "Checking out version ${KERNEL_VERSION}"
     git checkout ${KERNEL_VERSION}
 
-    echo "Building kernel..."
     make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} mrproper
     make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} defconfig
     make -j$(nproc) ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} all
+    make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} modules
+    make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} dtbs
 fi
 
 echo "Adding the Image in outdir"
@@ -49,15 +52,12 @@ if [ -d "${OUTDIR}/rootfs" ]; then
     sudo rm -rf ${OUTDIR}/rootfs
 fi
 
-# TODO: Create necessary base directories
-mkdir -p rootfs
-cd rootfs
-mkdir -p bin dev etc home lib proc sbin sys tmp usr var
+mkdir -p ${OUTDIR}/rootfs
+cd ${OUTDIR}/rootfs
+mkdir -p bin dev etc home lib lib64 proc sbin sys tmp usr var
 mkdir -p usr/bin usr/sbin usr/lib
 mkdir -p var/log
-mkdir -p home/conf home/scripts
 
-# Build BusyBox
 cd "$OUTDIR"
 if [ ! -d "${OUTDIR}/busybox" ]; then
     git clone git://busybox.net/busybox.git
@@ -69,61 +69,48 @@ else
     cd busybox
 fi
 
-# TODO: Make and install busybox
-make -j$(nproc) ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE}
+make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE}
 make CONFIG_PREFIX=${OUTDIR}/rootfs ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} install
 
 echo "Library dependencies"
-${CROSS_COMPILE}readelf -a ${OUTDIR}/rootfs/bin/busybox | grep "program interpreter"
-${CROSS_COMPILE}readelf -a ${OUTDIR}/rootfs/bin/busybox | grep "Shared library"
+SYSROOT=/home/vboxuser/arm-cross-compiler/arm-gnu-toolchain-13.3.rel1-x86_64-aarch64-none-linux-gnu/aarch64-none-linux-gnu/libc
 
-# TODO: Add library dependencies to rootfs
-TOOLCHAIN_DIR=/home/vboxuser/arm-cross-compiler/arm-gnu-toolchain-13.3.rel1-x86_64-aarch64-none-linux-gnu
-LIBC_PATH=${TOOLCHAIN_DIR}/aarch64-none-linux-gnu/libc
+mkdir -p ${OUTDIR}/rootfs/lib
+mkdir -p ${OUTDIR}/rootfs/lib64
 
-cd ${OUTDIR}/rootfs
-mkdir -p lib lib64
+cp -a ${SYSROOT}/lib/ld-linux-aarch64.so.1 ${OUTDIR}/rootfs/lib/
+cp -a ${SYSROOT}/lib64/libc.so.6 ${OUTDIR}/rootfs/lib64/
+cp -a ${SYSROOT}/lib64/libm.so.6 ${OUTDIR}/rootfs/lib64/
+cp -a ${SYSROOT}/lib64/libresolv.so.2 ${OUTDIR}/rootfs/lib64/
+cp -a ${SYSROOT}/lib64/libpthread.so.0 ${OUTDIR}/rootfs/lib64/
 
-cp -a ${LIBC_PATH}/lib/ld-linux-aarch64.so.1 lib/
-cp -a ${LIBC_PATH}/lib64/libc.so.* lib64/
-cp -a ${LIBC_PATH}/lib64/libm.so.* lib64/
-cp -a ${LIBC_PATH}/lib64/libresolv.so.* lib64/
 
-# TODO: Make device nodes
-sudo mknod -m 666 dev/null c 1 3
-sudo mknod -m 600 dev/console c 5 1
+echo "Creating device nodes"
+mkdir -p ${OUTDIR}/rootfs/dev
 
-# TODO: Clean and build the writer utility
-cd "$FINDER_APP_DIR"
+sudo mknod -m 666 ${OUTDIR}/rootfs/dev/null c 1 3
+sudo mknod -m 666 ${OUTDIR}/rootfs/dev/console c 5 1
+
+
+echo "Building writer utility"
+cd ${FINDER_APP_DIR}
 make clean
 make CROSS_COMPILE=${CROSS_COMPILE}
 
-# TODO: Copy the finder related scripts and executables to the /home directory on the target rootfs
-# Clean up conflicting directories/files
-rm -rf ${OUTDIR}/rootfs/home/conf
-rm -rf ${OUTDIR}/rootfs/home/scripts
+echo "Copying scripts and binaries to rootfs/home"
+cp finder.sh finder-test.sh writer ${OUTDIR}/rootfs/home/
+cp -r conf ${OUTDIR}/rootfs/home/
+cp autorun-qemu.sh ${OUTDIR}/rootfs/home/
 
-# Copy the finder related scripts and executables to the /home directory on the target rootfs
-cp writer ${OUTDIR}/rootfs/home/
-cp finder.sh finder-test.sh ${OUTDIR}/rootfs/home/
-cp -rL conf ${OUTDIR}/rootfs/home/
-cp finder.sh finder-test.sh ${OUTDIR}/rootfs/home/
+# Modify path inside finder-test.sh
+sed -i 's|\.\./conf|conf|g' ${OUTDIR}/rootfs/home/finder-test.sh
 
-# TODO: Chown the root directory
+echo "Changing ownership to root"
 cd ${OUTDIR}/rootfs
 sudo chown -R root:root *
 
-# Create initramfs
+echo "Creating initramfs.cpio.gz"
 cd ${OUTDIR}/rootfs
 find . | cpio -H newc -ov --owner root:root | gzip > ${OUTDIR}/initramfs.cpio.gz
 
-# Add for autotest
-echo "Copying initramfs.cpio.gz to /tmp/aesd-autograder"
-mkdir -p /tmp/aesd-autograder
-cp ${OUTDIR}/initramfs.cpio.gz /tmp/aesd-autograder/
-
-echo "Build completed!"
-echo "Kernel Image: ${OUTDIR}/Image"
-echo "Initramfs:    ${OUTDIR}/initramfs.cpio.gz"
-echo "Copied initramfs to /tmp/aesd-autograder/initramfs.cpio.gz"
-
+echo "Manual build complete!"
