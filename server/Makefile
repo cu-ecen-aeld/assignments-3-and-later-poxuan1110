@@ -1,17 +1,17 @@
 # server/Makefile
 
-CC ?= gcc              
-CFLAGS ?= -Wall -Werror -pthread
 TARGET = aesdsocket
 SRCS   = aesdsocket.c
 
-.PHONY: all default clean
+CC     ?= $(CROSS_COMPILE)gcc
+CFLAGS ?= -Wall -Werror -pthread
+
+.PHONY: all clean
 
 all: $(TARGET)
-default: all
 
 $(TARGET): $(SRCS)
-	$(CC) $(CFLAGS) $^ -o $@
+	$(CC) $(CFLAGS) -o $@ $^
 
 clean:
 	rm -f $(TARGET)
