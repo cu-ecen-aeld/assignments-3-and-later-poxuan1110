@@ -15,10 +15,10 @@ CROSS_COMPILE=aarch64-none-linux-gnu-
 
 if [ $# -lt 1 ]
 then
-    echo "Using default directory ${OUTDIR} for output"
+	echo "Using default directory ${OUTDIR} for output"
 else
-    OUTDIR=$1
-    echo "Using passed directory ${OUTDIR} for output"
+	OUTDIR=$1
+	echo "Using passed directory ${OUTDIR} for output"
 fi
 
 mkdir -p ${OUTDIR} || { echo "Failed to create output directory"; exit 1; }
@@ -26,12 +26,39 @@ mkdir -p ${OUTDIR} || { echo "Failed to create output directory"; exit 1; }
 cd "$OUTDIR"
 if [ ! -d "${OUTDIR}/linux-stable" ]; then
     echo "CLONING GIT LINUX STABLE VERSION ${KERNEL_VERSION} IN ${OUTDIR}"
+<<<<<<< HEAD
 if [ -d "${OUTDIR}/rootfs" ]
 then
 	echo "Deleting rootfs directory at ${OUTDIR}/rootfs and starting over"
 	sudo rm -rf ${OUTDIR}/rootfs
 fi
 
+=======
+    git clone ${KERNEL_REPO} --depth 1 --single-branch --branch ${KERNEL_VERSION}
+fi
+
+if [ -e ${OUTDIR}/linux-stable/arch/${ARCH}/boot/Image ]; then
+    echo "Skipping kernel build — Image already exists"
+else
+    cd linux-stable
+    echo "Building kernel version ${KERNEL_VERSION}"
+    git checkout ${KERNEL_VERSION}
+    make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} mrproper
+    make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} defconfig
+    make -j$(nproc) ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} all
+fi
+
+cp ${OUTDIR}/linux-stable/arch/${ARCH}/boot/Image ${OUTDIR}/
+
+echo "Creating the staging directory for the root filesystem"
+cd "$OUTDIR"
+if [ -d "${OUTDIR}/rootfs" ]
+then
+	echo "Deleting rootfs directory at ${OUTDIR}/rootfs and starting over"
+	sudo rm -rf ${OUTDIR}/rootfs
+fi
+
+>>>>>>> 83f2a1cb682f141dbcc7cb29527c65b4857abd57
 mkdir -p rootfs/{bin,sbin,etc,proc,sys,usr/{bin,sbin},dev,home,lib,lib64,tmp,var,lib/modules}
 chmod 755 rootfs
 
