@@ -1,30 +1,24 @@
-#!/bin/bash
 
-# Check if the correct number of arguments are provided
+#!/bin/sh
+
 if [ $# -ne 2 ]; then
-    echo "Error: Missing arguments."
-    echo "Usage: $0 <file_path> <text_string>"
+    echo "Error: Two arguments required - <file path> and <text string>"
     exit 1
 fi
 
-# Assign arguments to variables
 writefile="$1"
 writestr="$2"
 
-# Extract directory path from the file path
-dirpath=$(dirname "$writefile")
 
-# Create the directory path if it doesn't exist
-mkdir -p "$dirpath"
+mkdir -p "$(dirname "$writefile")"
 
-# Attempt to create or overwrite the file with writestr
-if echo "$writestr" > "$writefile"; then
-    echo "File '$writefile' created successfully with content: $writestr"
-else
-    echo "Error: Could not create or write to file '$writefile'."
+
+echo "$writestr" > "$writefile"
+
+
+if [ $? -ne 0 ]; then
+    echo "Error: Failed to create/write to '$writefile'"
     exit 1
 fi
 
-exit 0
-	
-
+echo "Successfully wrote to '$writefile'"

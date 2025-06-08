@@ -1,7 +1,6 @@
 #!/bin/bash
-# Script outline to install and build kernel.
-# Author: Siddhant Jajoo.
-# Completed by ChatGPT
+# Script to build a minimal Linux system for QEMU
+# Author: Siddhant Jajoo (updated)
 
 set -e
 set -u
@@ -22,44 +21,23 @@ else
     echo "Using passed directory ${OUTDIR} for output"
 fi
 
-mkdir -p ${OUTDIR}
+mkdir -p ${OUTDIR} || { echo "Failed to create output directory"; exit 1; }
 
 cd "$OUTDIR"
 if [ ! -d "${OUTDIR}/linux-stable" ]; then
     echo "CLONING GIT LINUX STABLE VERSION ${KERNEL_VERSION} IN ${OUTDIR}"
-    git clone ${KERNEL_REPO} --depth 1 --single-branch --branch ${KERNEL_VERSION} linux-stable
+if [ -d "${OUTDIR}/rootfs" ]
+then
+	echo "Deleting rootfs directory at ${OUTDIR}/rootfs and starting over"
+	sudo rm -rf ${OUTDIR}/rootfs
 fi
 
-if [ ! -e ${OUTDIR}/linux-stable/arch/${ARCH}/boot/Image ]; then
-    cd linux-stable
-    echo "Checking out version ${KERNEL_VERSION}"
-    git checkout ${KERNEL_VERSION}
-
-    make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} mrproper
-    make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} defconfig
-    make -j$(nproc) ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} all
-    make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} modules
-    make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} dtbs
-fi
-
-echo "Adding the Image in outdir"
-cp ${OUTDIR}/linux-stable/arch/${ARCH}/boot/Image ${OUTDIR}/
-
-echo "Creating the staging directory for the root filesystem"
-cd "$OUTDIR"
-if [ -d "${OUTDIR}/rootfs" ]; then
-    echo "Deleting rootfs directory at ${OUTDIR}/rootfs and starting over"
-    sudo rm -rf ${OUTDIR}/rootfs
-fi
-
-mkdir -p ${OUTDIR}/rootfs
-cd ${OUTDIR}/rootfs
-mkdir -p bin dev etc home lib lib64 proc sbin sys tmp usr var
-mkdir -p usr/bin usr/sbin usr/lib
-mkdir -p var/log
+mkdir -p rootfs/{bin,sbin,etc,proc,sys,usr/{bin,sbin},dev,home,lib,lib64,tmp,var,lib/modules}
+chmod 755 rootfs
 
 cd "$OUTDIR"
-if [ ! -d "${OUTDIR}/busybox" ]; then
+if [ ! -d "${OUTDIR}/busybox" ]
+then
     git clone git://busybox.net/busybox.git
     cd busybox
     git checkout ${BUSYBOX_VERSION}
@@ -70,47 +48,54 @@ else
 fi
 
 make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE}
-make CONFIG_PREFIX=${OUTDIR}/rootfs ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} install
+make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} CONFIG_PREFIX=${OUTDIR}/rootfs install
+# Create a valid /init script for the kernel to start
+cat > "${OUTDIR}/rootfs/init" <<'EOF'
+#!/bin/sh
+mount -t proc none /proc
+mount -t sysfs none /sys
+echo "Init script running. Starting shell..."
+exec /bin/sh
+EOF
 
+chmod +x ${OUTDIR}/rootfs/init
 echo "Library dependencies"
-SYSROOT=/home/vboxuser/arm-cross-compiler/arm-gnu-toolchain-13.3.rel1-x86_64-aarch64-none-linux-gnu/aarch64-none-linux-gnu/libc
 
-mkdir -p ${OUTDIR}/rootfs/lib
-mkdir -p ${OUTDIR}/rootfs/lib64
-
+SYSROOT=$(${CROSS_COMPILE}gcc -print-sysroot)
 cp -a ${SYSROOT}/lib/ld-linux-aarch64.so.1 ${OUTDIR}/rootfs/lib/
-cp -a ${SYSROOT}/lib64/libc.so.6 ${OUTDIR}/rootfs/lib64/
-cp -a ${SYSROOT}/lib64/libm.so.6 ${OUTDIR}/rootfs/lib64/
-cp -a ${SYSROOT}/lib64/libresolv.so.2 ${OUTDIR}/rootfs/lib64/
-cp -a ${SYSROOT}/lib64/libpthread.so.0 ${OUTDIR}/rootfs/lib64/
-
-
-echo "Creating device nodes"
-mkdir -p ${OUTDIR}/rootfs/dev
+cp -a ${SYSROOT}/lib64/ld-*.so* ${OUTDIR}/rootfs/lib64/ || true
+cp -a ${SYSROOT}/lib64/libc.so* ${OUTDIR}/rootfs/lib64/ || true
+cp -a ${SYSROOT}/lib64/libm.so* ${OUTDIR}/rootfs/lib64/ || true
+cp -a ${SYSROOT}/lib64/libresolv.so* ${OUTDIR}/rootfs/lib64/ || true
 
 sudo mknod -m 666 ${OUTDIR}/rootfs/dev/null c 1 3
-sudo mknod -m 666 ${OUTDIR}/rootfs/dev/console c 5 1
+sudo mknod -m 600 ${OUTDIR}/rootfs/dev/console c 5 1
 
-
-echo "Building writer utility"
 cd ${FINDER_APP_DIR}
 make clean
 make CROSS_COMPILE=${CROSS_COMPILE}
 
-echo "Copying scripts and binaries to rootfs/home"
-cp finder.sh finder-test.sh writer ${OUTDIR}/rootfs/home/
-cp -r conf ${OUTDIR}/rootfs/home/
+mkdir -p ${OUTDIR}/rootfs/home
+cp writer ${OUTDIR}/rootfs/home/
+cp finder.sh finder-test.sh ${OUTDIR}/rootfs/home/
+cp conf/username.txt conf/assignment.txt ${OUTDIR}/rootfs/home/
+sed -i 's|conf/username.txt|username.txt|g' ${OUTDIR}/rootfs/home/finder-test.sh
+
+sed -i 's|conf/assignment.txt|assignment.txt|g' ${OUTDIR}/rootfs/home/finder-test.sh
+chmod +x ${OUTDIR}/rootfs/home/finder.sh
+chmod +x ${OUTDIR}/rootfs/home/finder-test.sh
+
 cp autorun-qemu.sh ${OUTDIR}/rootfs/home/
+chmod +x ${OUTDIR}/rootfs/home/autorun-qemu.sh
 
-# Modify path inside finder-test.sh
-sed -i 's|\.\./conf|conf|g' ${OUTDIR}/rootfs/home/finder-test.sh
 
-echo "Changing ownership to root"
 cd ${OUTDIR}/rootfs
 sudo chown -R root:root *
+find . | cpio -H newc -ov --owner root:root > ${OUTDIR}/initramfs.cpio
+cd ${OUTDIR}
+gzip -f initramfs.cpio
+chmod +x ${OUTDIR}/rootfs/home/*.sh
 
-echo "Creating initramfs.cpio.gz"
-cd ${OUTDIR}/rootfs
-find . | cpio -H newc -ov --owner root:root | gzip > ${OUTDIR}/initramfs.cpio.gz
+echo "Build complete: Image and initramfs.cpio.gz are ready in ${OUTDIR}"
+exit 0
 
-echo "Manual build complete!"

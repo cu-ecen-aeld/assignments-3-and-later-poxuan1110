@@ -1,11 +1,12 @@
 #include "systemcalls.h"
 #include <stdlib.h>
-#include <stdbool.h>
 #include <unistd.h>
+#include <sys/types.h>
 #include <sys/wait.h>
 #include <fcntl.h>
-#include <stdarg.h>
 #include <stdio.h>
+#include <stdarg.h>
+#include <stdbool.h>
 
 /**
  * @param cmd the command to execute with system()
@@ -18,8 +19,18 @@ bool do_system(const char *cmd)
 {
     if (cmd == NULL) return false;
 
-    fflush(stdout);  // 避免 fork() 前輸出重複
+/*
+ * TODO  add your code here
+ *  Call the system() function with the command set in the cmd
+ *   and return a boolean true if the system() call completed with success
+ *   or false() if it returned a failure
+*/
+    if (cmd == NULL) {
+        return false;
+    }
+
     int ret = system(cmd);
+    return (ret == 0);
 
     if (ret == -1) {
         perror("system call failed");
@@ -46,30 +57,43 @@ bool do_exec(int count, ...)
         command[i] = va_arg(args, char *);
     }
     command[count] = NULL;
-    va_end(args);
-
-    fflush(stdout);  // 避免 fork() 前輸出重複
+    // this line is to avoid a compile warning before your implementation is complete
+    // and may be removed
+    
     pid_t pid = fork();
-
     if (pid == -1) {
         perror("fork failed");
+        va_end(args);
         return false;
     }
 
     if (pid == 0) {
-        // child process
+        // Child
         execv(command[0], command);
-        perror("execv failed");
-        exit(1);
-    } else {
-        // parent process
-        int status;
-        if (waitpid(pid, &status, 0) == -1) {
-            perror("waitpid failed");
-            return false;
-        }
-        return WIFEXITED(status) && WEXITSTATUS(status) == 0;
+        perror("execv failed"); // If execv returns, it failed
+        exit(EXIT_FAILURE);
     }
+
+    int status;
+    if (waitpid(pid, &status, 0) == -1) {
+        perror("waitpid failed");
+        va_end(args);
+        return false;
+    }
+
+    va_end(args);
+    return WIFEXITED(status) && WEXITSTATUS(status) == 0;
+
+/*
+ * TODO:
+ *   Execute a system command by calling fork, execv(),
+ *   and wait instead of system (see LSP page 161).
+ *   Use the command[0] as the full path to the command to execute
+ *   (first argument to execv), and use the remaining arguments
+ *   as second argument to the execv() command.
+ *
+*/
+
 }
 
 /**
@@ -88,42 +112,52 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
         command[i] = va_arg(args, char *);
     }
     command[count] = NULL;
-    va_end(args);
-
-    fflush(stdout);  // 避免 fork() 前輸出重複
+    // this line is to avoid a compile warning before your implementation is complete
+    // and may be removed
     pid_t pid = fork();
-
     if (pid == -1) {
         perror("fork failed");
+        va_end(args);
         return false;
     }
 
     if (pid == 0) {
-        // child process: redirect stdout
         int fd = open(outputfile, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-        if (fd < 0) {
+        if (fd == -1) {
             perror("open failed");
-            exit(1);
+            exit(EXIT_FAILURE);
         }
 
         if (dup2(fd, STDOUT_FILENO) == -1) {
             perror("dup2 failed");
             close(fd);
-            exit(1);
+            exit(EXIT_FAILURE);
         }
 
         close(fd);
         execv(command[0], command);
         perror("execv failed");
-        exit(1);  // execv only returns on error
-    } else {
-        // parent process
-        int status;
-        if (waitpid(pid, &status, 0) == -1) {
-            perror("waitpid failed");
-            return false;
-        }
-        return WIFEXITED(status) && WEXITSTATUS(status) == 0;
+        exit(EXIT_FAILURE);
     }
+
+    int status;
+    if (waitpid(pid, &status, 0) == -1) {
+        perror("waitpid failed");
+        va_end(args);
+        return false;
+    }
+
+    va_end(args);
+    return WIFEXITED(status) && WEXITSTATUS(status) == 0;
+
+
+/*
+ * TODO
+ *   Call execv, but first using https://stackoverflow.com/a/13784315/1446624 as a refernce,
+ *   redirect standard out to a file specified by outputfile.
+ *   The rest of the behaviour is same as do_exec()
+ *
+*/
+
 }
 
